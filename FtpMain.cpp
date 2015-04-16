@@ -11,20 +11,20 @@ int main(){
 	cin >> choice;
 	switch(choice){
 	case '1':
+		cout << "MiniFtp is using as a server!" << endl;
 		FtpServer server;
 		if(!server.Initial())
 			break;
-		cout << "MiniFtp is using as a server!" << endl;
 		server.Serve();
 		break;
 
 	case '2':
+		cout << "MiniFtp is using as a client!" << endl;
 		FtpClient client;
 		cout << "Please input the server IP: ";
 		char serverIP[16];
 		cin >> serverIP;
 		client.Initial(serverIP);
-		cout << "MiniFtp is using as a client!" << endl;
 		client.work();
 		break;
 

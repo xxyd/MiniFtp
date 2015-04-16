@@ -34,7 +34,6 @@ private:
 	SOCKET sServer;
 	sockaddr_in saClient;
 	SOCKET sData;
-	fstream fin;
 	CmdPacket cmd;
 	RspnsPacket rspns;
 
@@ -42,11 +41,13 @@ private:
 	bool ReceiveCmd();
 	bool ExecCmd();
 	bool InitialDataSocket();
-	bool ReceiveData();
-	bool SendData();
+	bool ExecCD();
+	bool ExecPWD();
+	bool ExecPUT();
+	bool ExecGET();
+	bool ExecLS();
+	void ExecQUIT();
 	bool FileExist();
-	bool SendFileList();	
-	bool SendFileRecord(WIN32_FIND_DATA* pfd);
 public:
 	ServerThread(SOCKET s, sockaddr_in a);
 	void DoServer();

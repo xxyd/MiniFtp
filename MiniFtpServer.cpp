@@ -107,7 +107,7 @@ ServerThread::ServerThread(SOCKET s, sockaddr_in a){
 	saClient = a;
 
 	//发送回复报文给客户端，内含命令使用说明：
-	cout << "Client address is " << inet_ntoa(saClient.sin_addr) << ntohs(saClient.sin_port) << endl;
+	cout << "Client address is " << inet_ntoa(saClient.sin_addr) << ":" << ntohs(saClient.sin_port) << endl;
 	saClient.sin_port = htons(DATA_PORT);//修改客户端地址的端口值，用于后面建立数据连接
 
 	rspns.type = DONE;
@@ -127,11 +127,51 @@ ServerThread::ServerThread(SOCKET s, sockaddr_in a){
 
 void ServerThread::DoServer(){
 	//循环获取客户端命令报文并进行处理
-	while(true){
+	bool exec = true;
+	while(exec){
 		if(!ReceiveCmd())
 			break;
-		if(!ExecCmd())
+		//根据命令类型分派执行：
+		switch(cmd.type)
+		{
+		case CD:
+			if(!ExecCD())
+				exec = false;
 			break;
+			
+		case PWD:
+			if(!ExecPWD())
+				exec = false;
+			break;
+
+		case PUT:
+			if(!ExecPUT())
+				exec = false;
+			break;
+
+		case GET:
+			if(!ExecGET())
+				exec = false;
+			break;
+
+		case LS:
+			if(!ExecLS())
+				exec = false;
+			break;
+			
+		case QUIT:
+			ExecQUIT();
+			exec = false;
+			break;
+
+		default:
+			rspns.type = ERR_TYPE;
+			if(!SendRspns())
+				exec = false;
+			break;
+		}
+		//if(!ExecCmd())
+		//	break;
 	}
 	
 	//线程结束前关闭控制连接套接字：
@@ -172,103 +212,6 @@ bool ServerThread::ReceiveCmd(){
 	return true; //成功获取命令报文
 }
 
-bool ExecCmd(){
-	//根据命令类型分派执行：
-	switch(cmd.type)
-	{
-	case CD:
-		//设置当前目录，使用win32 API接口函数
-		if(SetCurrentDirectory(cmd.arg)){
-			rspns.type = DONE;
-			if(!GetCurrentDirectory(RSPNS_TEXT_SIZE, rspns.text))
-				rspns.type = ERR_CD1;
-		}
-		else
-			rspns.type = ERR_CD;
-		if(!SendRspns()) //发送回复报文
-			return false;
-		break;
-
-	case PWD:
-		rspns.type = DONE;
-		//获取当前目录，并放至回复报文中
-		if(!GetCurrentDirectory(RSPNS_TEXT_SIZE, rspns.text))
-			rspns.type = ERR_PWD;
-		if(!SendRspns()) 
-			return false;
-		break;
-
-	case PUT:
-		//首先发送回复报文
-		//verify no file with same name exits to make sure that no file will be overwritten
-		if(FileExists(cmd.arg)){
-			rspns.type = ERR_PUT;
-			if(!SendRspns()) 
-				return false;
-		}
-		else{
-			rspns.type = DONE;
-			if(!SendRspns()) 
-				return false;
-			//另建一个数据连接来接收数据：
-			if(!InitialDataSocket()) 
-				return false;
-			if(!ReceiveData()) 
-				return false;
-		}
-		break;
-
-	case GET:
-		fin.open(cmd.arg, ios::in|ios::binary);
-		if(fin.is_open()){
-			rspns.type = DONE;
-			if(!SendRspns()){
-				fin.close();
-				return false;
-			}
-			else{
-				//创建额外的数据连接来传送数据：
-				if(!InitialDataSocket()){
-					fin.close();
-					return false;
-				}
-				if(!SendData())
-					return false;
-			}
-		}
-		else{ //打开文件失败：
-			rspns.type = ERR_GET;
-			if(!SendRspns()) 
-				return false;
-		}
-		break;
-
-	case LS:
-		rspns.type = DONE;
-		if(!SendRspns())
-			return false;
-		//首先建立数据连接：
-		if(!InitialDataSocket()) 
-			return false;
-		//发送文件列表信息：
-		if(!SendFileList())
-			return false;
-		break;
-
-	case QUIT:
-		cout << "Client exit!" << endl;
-		rspns.type = DONE;
-		SendRspns();
-		return false;
-
-	default:
-		rspns.type = ERR_TYPE;
-		if(!SendRspns())
-			return false;
-	}
-	return true;
-}
-
 bool ServerThread::InitialDataSocket(){
 	//创建socket
 	sData = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -280,78 +223,148 @@ bool ServerThread::InitialDataSocket(){
 	//请求连接客户端
 	int ret = connect(sData, (struct sockaddr *)&saClient, sizeof(saClient));
 	if (ret == SOCKET_ERROR){
-		cout << "Connect to client failed!" << endl;
+		cout << "Connect to client failed! Error code: " << WSAGetLastError() << endl;
 		closesocket(sData);
 		return false;
 	}
 	return true;
 }
 
-bool ServerThread::ReceiveData(){
-	char buf[BUFFER_SIZE];
-	fstream fout;
-	fout.open(cmd.arg, ios::out|ios::binary);
-	if(fout.is_open()){
-		//循环接收所有数据，并同时写往文件：
-		cout << "Receiving data..." << endl;
-		while(true){
-			int ret = recv(sData, buf, BUFFER_SIZE, 0);
-			if(ret == SOCKET_ERROR){
-				cout << "Receive data failed because some error occurs during data transmiting!" << endl;
+bool ServerThread::ExecCD(){
+	//设置当前目录，使用win32 API接口函数
+	if(SetCurrentDirectory(cmd.arg)){
+		rspns.type = DONE;
+		if(!GetCurrentDirectory(RSPNS_TEXT_SIZE, rspns.text))
+			rspns.type = ERR_CD1;
+	}
+	else
+		rspns.type = ERR_CD;
+	if(!SendRspns()) //发送回复报文
+		return false;
+	return true;
+}
+
+bool ServerThread::ExecPWD(){
+	rspns.type = DONE;
+	//获取当前目录，并放至回复报文中
+	if(!GetCurrentDirectory(RSPNS_TEXT_SIZE, rspns.text))
+		rspns.type = ERR_PWD;
+	if(!SendRspns()) 
+		return false;
+	return true;
+}
+
+bool ServerThread::ExecPUT(){
+	//查找服务器的当前目录下有无重名文件
+	if(FileExists(cmd.arg)){
+		rspns.type = ERR_PUT;
+		if(!SendRspns()) 
+			return false;
+	}
+	else{
+		fstream fout;
+		fout.open(cmd.arg, ios::out|ios::binary);
+		if(fout.is_open()){ //检测文件是否打开
+			//无重名文件的情况下则发送回复报文
+			rspns.type = DONE;
+			if(!SendRspns()) {
 				fout.close();
+				return false;
+			}
+			//另建一个数据连接来接收数据：
+			if(!InitialDataSocket()) {
+				fout.close();
+				return false;
+			}
+			//if(!ReceiveData()) 	
+				//return false;
+			char buf[BUFFER_SIZE];
+			//循环接收所有数据，并同时写往文件：
+			cout << "Receiving data..." << endl;
+			while(true){
+				int ret = recv(sData, buf, BUFFER_SIZE, 0);
+				if(ret == SOCKET_ERROR){
+					cout << "Receive data failed because some error occurs during data transmiting!" << endl;
+					fout.close();
+					closesocket(sData);
+					return false;
+				}
+
+				if(ret == 0) //数据传送结束
+					break;
+
+				fout.write(buf, ret);
+			}
+			fout.close();
+			closesocket(sData);
+			cout << "Receive data succeed!" << endl;
+		}
+		else{
+			cout << "Can't open the file to write data!" << endl;
+			rspns.type = ERR_PUT1;
+			if(!SendRspns()) 
+				return false;
+			fout.close();
+			closesocket(sData);
+		}
+	}	
+	return true;
+}
+
+bool ServerThread::ExecGET(){
+	fstream fin;
+	fin.open(cmd.arg, ios::in|ios::binary);
+	if(fin.is_open()){
+		rspns.type = DONE;
+		if(!SendRspns()){
+			fin.close();
+			return false;
+		}
+		//创建额外的数据连接来传送数据：
+		if(!InitialDataSocket()){
+			fin.close();
+			return false;
+		}
+		//if(!SendData())
+		//	return false;
+		char buf[BUFFER_SIZE];
+		cout << "Sending data..." << endl;
+		while(true){
+		//从文件中循环读取数据并发往客户端
+			fin.read(buf, BUFFER_SIZE);
+			int length = fin.gcount();
+			int ret = send(sData, buf, length, 0);
+			if(ret == SOCKET_ERROR){
+				cout << "Send data failed because some error occurs during data transmiting!" << endl;
+				fin.close();
 				closesocket(sData);
 				return false;
 			}
-
-			if(ret == 0) //数据传送结束
+			if(length < BUFFER_SIZE)
 				break;
-
-			fout.write(buf, ret);
 		}
-		fout.close();
+		fin.close();
 		closesocket(sData);
-		cout << "Receive data succeed!" << endl;
-		return true;
+		cout << "Send data succeed!" << endl;
 	}
-	else{
-		cout << "Can't open the file to write data!" << endl;
-		fout.close();
-		closesocket(sData);
-		return false;
-	}
-}
-
-bool ServerThread::SendData(){
-	char buf[BUFFER_SIZE];
-	cout << "Sending data..." << endl;
-	while(true){
-	//从文件中循环读取数据并发往客户端
-		fin.read(buf, BUFFER_SIZE);
-		int length = fin.gcount();
-		int ret = send(sData, buf, length, 0);
-		if(ret == SOCKET_ERROR){
-			cout << "Send data failed because some error occurs during data transmiting!" << endl;
-			fin.close();
-			closesocket(sData);
+	else{ //打开文件失败：
+		rspns.type = ERR_GET;
+		if(!SendRspns()) 
 			return false;
-		}
-		if(length < BUFFER_SIZE)
-			break;
 	}
-	fin.close();
-	closesocket(sData);
-	cout << "Send data succeed!" << endl;
 	return true;
 }
 
-bool ServerThread::FileExist(){
-	WIN32_FIND_DATA fd;
-	if(FindFirstFile(cmd.arg, &fd) == INVALID_HANDLE_VALUE)
+bool ServerThread::ExecLS(){
+	rspns.type = DONE;
+	if(!SendRspns())
 		return false;
-	return true;
-}
-
-bool ServerThread::SendFileList(){
+	//首先建立数据连接：
+	if(!InitialDataSocket()) 
+		return false;
+	//发送文件列表信息：
+	//if(!SendFileList())
+	//	return false;
 	HANDLE hff;
 	WIN32_FIND_DATA fd;
 
@@ -361,47 +374,61 @@ bool ServerThread::SendFileList(){
 		cout << "List file failed!" << endl;
 		char *dataStr="Can't list files!\n";
 		int ret = send(sData, dataStr, strlen(dataStr), 0);
-		if(ret == SOCKET_ERROR)
+		if(ret == SOCKET_ERROR){
 			cout << "Send file list failed!" << endl;
-		closesocket(sData);
-		return false;
+			closesocket(sData);
+			return false;
+		}
 	}
 
 	bool find = true;
 	while(find){
 		//发送此项文件信息：
-		if(!SendFileRecord(&fd)){
-			closesocket(datatcps);
+		//if(!SendFileRecord(&fd)){
+		//	closesocket(datatcps);
+		//	return false;
+		//}
+		char filerecord[MAX_PATH+32];
+		FILETIME ft;
+		FileTimeToLocalFileTime(fd.ftLastWriteTime, &ft);
+		SYSTEMTIME lastwtime;
+		FileTimeToSystemTime(&ft, &lastwtime);
+		char *dir = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "<DIR>" : "";
+		sprintf(filerecord,"%04d-%02d-%02d %02d:%02d    %5s  %10d  %-20s\n",
+			lastwtime.wYear,
+			lastwtime.wMonth,
+			lastwtime.wDay,
+			lastwtime.wHour,
+			lastwtime.wMinute,
+			dir,
+			fd.nFileSizeLow,
+			fd.cFileName);
+		int ret = send(sData, filerecord, strlen(filerecord), 0);
+		if(ret == SOCKET_ERROR){
+			cout << "Send file list failed!" << endl;
+			closesocket(sData);
 			return false;
 		}
+
 		//搜索下一个文件：
 		find = FindNextFile(hff, &fd);
 	}
 
 	closesocket(sData);
 	return true;
+
 }
 
-bool ServerThread::SendFileRecord(WIN32_FIND_DATA* pfd){
-	char filerecord[MAX_PATH+32];
-	FILETIME ft;
-	FileTimeToLocalFileTime(&pfd->ftLastWriteTime, &ft);
-	SYSTEMTIME lastwtime;
-	FileTimeToSystemTime(&ft, &lastwtime);
-	char *dir = pfd->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "<DIR>" : "";
-	sprintf(filerecord,"%04d-%02d-%02d %02d:%02d    %5s  %10d  %-20s\n",
-		lastwtime.wYear,
-		lastwtime.wMonth,
-		lastwtime.wDay,
-		lastwtime.wHour,
-		lastwtime.wMinute,
-		dir,
-		pfd->nFileSizeLow,
-		pfd->cFileName);
-	int ret = send(sData, filerecord, strlen(filerecord), 0);
-	if(ret == SOCKET_ERROR){
-		cout << "Send file list failed!" << endl;
+void ServerThread::ExecQUIT(){
+	cout << "Client(" << inet_ntoa(saClient.sin_addr) << ") exit!" << endl;
+	rspns.type = DONE;
+	strcpy_s(rspns.text, "Goodbye!\n");
+	SendRspns();
+}
+
+bool ServerThread::FileExist(){
+	WIN32_FIND_DATA fd;
+	if(FindFirstFile(cmd.arg, &fd) == INVALID_HANDLE_VALUE)
 		return false;
-	}
 	return true;
 }

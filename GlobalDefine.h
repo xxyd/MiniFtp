@@ -23,6 +23,7 @@ enum RspnsType{
 	ERR_CD1,
 	ERR_PWD,
 	ERR_PUT,
+	ERR_PUT1,
 	ERR_GET,
 	ERR_TYPE
 };

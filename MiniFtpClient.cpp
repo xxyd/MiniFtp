@@ -1,13 +1,6 @@
 #include "MiniFtpClient.h"
 
-FtpClient::FtpClient(){
-	if(argc != 2)
-	{
-		printf("usage : SFTPClient hostname(or IP address)\n");
-		exit(1);
-	}
-
-}
+FtpClient::FtpClient(){}
 
 bool FtpClient::Initial(char *IP){
 	//struct hostent *he;
@@ -109,7 +102,7 @@ void FtpClient::Work(){
 
 bool FtpClient::SendCmd(){
 	char *pCmd = (char *)&cmd；
-	int ret = send(sClient, pcmd, sizeof(CmdPacket), 0);
+	int ret = send(sClient, pCmd, sizeof(CmdPacket), 0);
 	if(ret == SOCKET_ERROR){
 		cout << "Send command failed!" << WSAGetLastError() << endl;
 		return false;
@@ -439,6 +432,9 @@ void FtpClient::ShowErr(){
 			break;
 		case ERR_PUT:
 			cout << "File already exist on server!" << endl;
+			break;
+		case ERR_PUT1:
+			cout << "File not exist! But can't open the file!" << endl;
 			break;
 		case ERR_GET:
 			cout << "Can't open that file!" << endl;
