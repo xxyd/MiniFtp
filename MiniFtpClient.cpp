@@ -176,7 +176,8 @@ bool FtpClient::DoCD(){
 		return false;
 	if(rspns.type != DONE)
 		ShowErr();
-	cout << rspns.text << endl;
+	else
+		cout << rspns.text << endl;
 	return true;
 }
 
@@ -199,7 +200,8 @@ bool FtpClient::DoPWD(){
 		return false;
 	if(rspns.type != DONE)
 		ShowErr();
-	cout << rspns.text << endl;
+	else
+		cout << rspns.text << endl;
 	return true;
 }
 
@@ -235,7 +237,7 @@ bool FtpClient::DoPUT(){
 		ShowErr();
 		fin.close();
 		closesocket(sdListen);
-		return false;
+		return true;
 	}
 	
 	struct sockaddr_in saServer;
@@ -407,9 +409,10 @@ bool FtpClient::DoLS(){
 
 void FtpClient::DoQUIT(){
 	cmd.type = QUIT;
-	SendCmd();
-	ReceiveRspns();
-	cout << rspns.text;
+	if(!SendCmd())
+		return;
+	if(ReceiveRspns())
+		cout << rspns.text;
 }
 
 bool FtpClient::FileExist(){
@@ -441,5 +444,9 @@ void FtpClient::ShowErr(){
 			break;
 		case ERR_TYPE:
 			cout << "Unsupported command!" << endl;
+			break;
+		default:
+			cout << "Undefined error type!" << endl;
+			break;
 	}
 }
