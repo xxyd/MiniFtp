@@ -3,54 +3,51 @@
 
 #include "GlobalDefine.h"
 #include <winsock2.h>
-#include <fstream>
 using namespace std;
 
-//åˆ›å»ºçº¿ç¨‹æ—¶ä¼ é€’çš„æ•°æ®ç»“æ„ï¼Œå†…å«æ§åˆ¶è¿æ¥å¥—æ¥å­—å’Œå®¢æˆ·ç«¯åœ°å€ä¿¡æ¯ï¼š
-// struct _threadArg {
-// 	SOCKET	sServer;
-// 	sockaddr_in saClient;
-// } threadArg;
+//Ïß³Ìº¯ÊıµÄ²ÎÊı
 struct threadArg{
-	SOCKET	sServer;
-	sockaddr_in saClient;
+	SOCKET	sServer; //¿ØÖÆÁ¬½ÓÁ¬½ÓÌ×½Ó×Ö
+	sockaddr_in saClient; //¿Í»§¶ËµÄµØÖ·ĞÅÏ¢
 };
 
+//Ïß³Ìº¯Êı£¬ÓÃÓÚ´¦Àí¿Í»§¶ËµÄ¸÷ÖÖÇëÇó
 DWORD WINAPI ThreadFunc(LPVOID pTArg);
 
+//MiniFtp·şÎñÆ÷Àà
 class FtpServer{
 private:
-	SOCKET sListen;
-	threadArg *pTArg;
-	
+	SOCKET sListen; //·şÎñÆ÷¿ØÖÆÁ¬½ÓÕìÌıÌ×½Ó×Ö
+	threadArg *pTArg; //Ïß³Ì²ÎÊı
+
 public:
-	FtpServer();
-	bool Initial();
-	void Serve();
+	FtpServer(); 
+	bool Initial(); //³õÊ¼»¯¿ØÖÆÁ¬½ÓÕìÌıÌ×½Ó×Ö
+	void Serve(); //Æô¶¯·şÎñ
 };
 
+//·şÎñÆ÷Ïß³ÌÀà
 class ServerThread{
 private:
-	SOCKET sServer;
-	sockaddr_in saClient;
-	SOCKET sData;
-	CmdPacket cmd;
-	RspnsPacket rspns;
+	SOCKET sServer; //·şÎñÆ÷¿ØÖÆÁ¬½ÓÁ¬½ÓÌ×½Ó×Ö
+	sockaddr_in saClient; //¿Í»§¶ËµÄµØÖ·
+	SOCKET sData; //·şÎñÆ÷Êı¾İÁ¬½ÓÁ¬½ÓÌ×½Ó×Ö
+	CmdPacket cmd; //ÃüÁîÊı¾İ°ü
+	RspnsPacket rspns; //Ó¦´ğÊı¾İ°ü
 
-	bool SendRspns();
-	bool ReceiveCmd();
-	bool ExecCmd();
-	bool InitialDataSocket();
-	bool ExecCD();
-	bool ExecPWD();
-	bool ExecPUT();
-	bool ExecGET();
-	bool ExecLS();
-	void ExecQUIT();
-	bool FileExist();
+	bool SendRspns(); //·¢ËÍÓ¦´ğÊı¾İ°ü
+	bool ReceiveCmd(); //½ÓÊÕÃüÁîÊı¾İ°ü
+	bool InitialDataSocket(); //³õÊ¼»¯Êı¾İÁ¬½ÓÁ¬½ÓÌ×½Ó×Ö
+	bool ExecCD(); //Ö´ĞĞcdÖ¸Áî
+	bool ExecPWD(); //Ö´ĞĞpwdÖ¸Áî
+	bool ExecPUT(); //Ö´ĞĞputÖ¸Áî
+	bool ExecGET(); //Ö´ĞĞgetÖ¸Áî
+	bool ExecLS(); //Ö´ĞĞlsÖ¸Áî
+	void ExecQUIT(); //Ö´ĞĞquitÖ¸Áî
+	bool FileExist(); //ÅĞ¶ÏÎÄ¼şÊÇ·ñÒÑ´æÔÚÓëµ±Ç°Ä¿Â¼ÏÂ
 public:
-	ServerThread(SOCKET s, sockaddr_in a);
-	void DoServer();
+	ServerThread(SOCKET s, sockaddr_in a); //¹¹Ôìº¯Êı
+	void DoServer(); //Ñ­»·Ö´ĞĞ¿Í»§¶ËµÄÇëÇó
 };
 
 #endif

@@ -1,38 +1,43 @@
 #include "MiniFtpServer.h"
+#include <iostream>
+#include <fstream>
+using namespace std;
 
+//FtpServer¹¹Ôìº¯Êı
 FtpServer::FtpServer(){}
 
+ //³õÊ¼»¯¿ØÖÆÁ¬½ÓÕìÌıÌ×½Ó×Ö
 bool FtpServer::Initial(){
 
 	WORD wVersionRequested;
 	WSADATA wsaData;
 	sockaddr_in saServer;
 	int ret;
-	//winsock åˆå§‹åŒ–
+	//winsock ³õÊ¼»¯
 	wVersionRequested = MAKEWORD(2, 2);
 	ret = WSAStartup(wVersionRequested, &wsaData);
 	if (ret != 0){
 		cout << "WSAStartup failed!" << endl;
 		return false;
 	}
-	//ç¡®è®¤Winsockæ”¯æŒ2.2ç‰ˆæœ¬
+	//È·ÈÏWinsockÖ§³Ö2.2°æ±¾
 	if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2){
 		cout << "Invalid Winsock version!" << endl;
 		WSACleanup();
 		return false;
 	}
-
+	//´´½¨Êı¾İÁ¬½ÓÕìÌıÌ×½Ó×Ö£¬Ê¹ÓÃTCPĞ­Òé
 	sListen = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if(sListen == INVALID_SOCKET){
+	if (sListen == INVALID_SOCKET){
 		cout << "Create listen socket failed!" << endl;
 		WSACleanup();
 		return false;
 	}
-	//æ„å»ºæœ¬åœ°åœ°å€ä¿¡æ¯
+	//¹¹½¨±¾µØµØÖ·ĞÅÏ¢
 	saServer.sin_family = AF_INET;
 	saServer.sin_port = htons(CMD_PORT);
 	saServer.sin_addr.S_un.S_addr = htonl(INADDR_ANY);
-	//ç»‘å®š
+	//°ó¶¨
 	ret = bind(sListen, (struct sockaddr *)&saServer, sizeof(saServer));
 	if (ret == SOCKET_ERROR){
 		cout << "Bind failed! Error code: " << WSAGetLastError() << endl;
@@ -40,7 +45,7 @@ bool FtpServer::Initial(){
 		WSACleanup();
 		return false;
 	}
-	//ä¾¦å¬è¿æ¥è¯·æ±‚
+	//ÕìÌıÁ¬½ÓÇëÇó
 	ret = listen(sListen, 5);
 	if (ret == SOCKET_ERROR){
 		cout << "Listen failed! Error code: " << WSAGetLastError() << endl;
@@ -51,40 +56,30 @@ bool FtpServer::Initial(){
 	return true;
 }
 
+//Æô¶¯·şÎñ
 void FtpServer::Serve(){
-
-	//å¾ªç¯æ¥å—å®¢æˆ·ç«¯è¿æ¥è¯·æ±‚ï¼Œå¹¶ç”Ÿæˆçº¿ç¨‹å»å¤„ç†ï¼š
+	//Ñ­»·½ÓÊÜ¿Í»§¶ËµÄÁ¬½ÓÇëÇó£¬½ÓÊÜÁ¬½ÓÇëÇóºóÉú³ÉÏß³ÌÀ´´¦Àí
 	while(true){
 		pTArg = NULL;
-		pTArg = new pTArg;
-		if(pTArg == NULL){
+		pTArg = new threadArg;
+		if (pTArg == NULL){
 			cout << "Attribute memory failed!" << endl;
 			continue;
 		}
-		
+
+		//×èÈûµÈ´ı¿Í»§¶ËµÄÁ¬½ÓÇëÇó
 		int length = sizeof(pTArg->saClient);
-		//ç­‰å¾…æ¥å—å®¢æˆ·ç«¯æ§åˆ¶è¿æ¥è¯·æ±‚
-		pTArg->sServer = accept(sListen, (struct sockaddr *)&pTArg->clientaddr, &length);
-		if(pTArg->sServer == INVALID_SOCKET){
+		pTArg->sServer = accept(sListen, (struct sockaddr *)&pTArg->saClient, &length);
+		if (pTArg->sServer == INVALID_SOCKET){
 			cout << "Accept failed! Error code: " << WSAGetLastError() << endl;
 			delete pTArg;
-			continue; 
+			continue;
 		}
 
-		//åˆ›å»ºä¸€ä¸ªçº¿ç¨‹æ¥å¤„ç†ç›¸åº”å®¢æˆ·ç«¯çš„è¯·æ±‚ï¼š
-		DWORD dwThreadId;//, dwThrdParam = 1; 
-		HANDLE hThread; 
-		
-		hThread = CreateThread( 
-			NULL,                        // no security attributes 
-			0,                           // use default stack size  
-			ThreadFunc,                  // thread function 
-			pTArg,					// argument to thread function 
-			0,                           // use default creation flags 
-			&dwThreadId);                // returns the thread identifier 
-		
-		// Check the return value for success. 
-		
+		//½ÓÊÜ¿Í»§¶ËµÄÏß³ÌÁ¬½ÓºóÉú³ÉÏß³Ì´¦Àí¿Í»§¶ËµÄÇëÇó
+		DWORD dwThreadId, dwThrdParam = 1;
+		HANDLE hThread;
+		hThread = CreateThread(NULL, 0, ThreadFunc, pTArg, 0, &dwThreadId);
 		if (hThread == NULL){
 			cout << "Create thread failed!" << endl;
 			closesocket(pTArg->sServer);
@@ -93,25 +88,28 @@ void FtpServer::Serve(){
 	}
 }
 
-//çº¿ç¨‹å‡½æ•°ï¼Œå‚æ•°åŒ…æ‹¬ç›¸åº”æ§åˆ¶è¿æ¥çš„å¥—æ¥å­—ï¼š
-DWORD WINAPI ThreadFunc( LPVOID pTArg ) { 
-	ServerThread serverThread(((threadArg *)pTArg)->sServer,  ((threadArg *)pTArg)->saClient);
-	serverThread.DoServer(); 
+//Ïß³Ìº¯Êı
+DWORD WINAPI ThreadFunc(LPVOID pTArg) {
+	//Éú³É·şÎñÆ÷Ïß³ÌÀàµÄ¶ÔÏóÀ´´¦Àí¿Í»§¶ËµÄÇëÇó
+	ServerThread serverThread(((threadArg *)pTArg)->sServer, ((threadArg *)pTArg)->saClient);
+	serverThread.DoServer();
 
+	//Ïß³ÌÍÆ³öÇ°É¾³ı´«Èë²ÎÊı·ÖÅäµÄÄÚ´æÀ´ÊÍ·ÅÄÚ´æ
 	delete pTArg;
 	return 0;
-} 
+}
 
+//·şÎñÆ÷Ïß³ÌÀà¹¹Ôìº¯Êı
 ServerThread::ServerThread(SOCKET s, sockaddr_in a){
+	//³õÊ¼»¯¿ØÖÆÁ¬½ÓÁ¬½ÓÌ×½Ó×ÖºÍ¿Í»§¶ËµØÖ·ĞÅÏ¢
 	sServer = s;
 	saClient = a;
-
-	//å‘é€å›å¤æŠ¥æ–‡ç»™å®¢æˆ·ç«¯ï¼Œå†…å«å‘½ä»¤ä½¿ç”¨è¯´æ˜ï¼š
-	cout << "Client address is " << inet_ntoa(saClient.sin_addr) << ":" << ntohs(saClient.sin_port) << endl;
-	saClient.sin_port = htons(DATA_PORT);//ä¿®æ”¹å®¢æˆ·ç«¯åœ°å€çš„ç«¯å£å€¼ï¼Œç”¨äºåé¢å»ºç«‹æ•°æ®è¿æ¥
-
+	
+	cout << "Client address is " << inet_ntoa(saClient.sin_addr) << ":" << ntohs(saClient.sin_port) << endl; //ÏÔÊ¾¿Í»§¶ËµÄIPµØÖ·ºÍ¶Ë¿Ú
+	saClient.sin_port = htons(DATA_PORT);//ĞŞ¸Ä¿Í»§¶ËµØÖ·µÄ¶Ë¿ÚÖµ£¬ÓÃÓÚºóÃæ½¨Á¢Êı¾İÁ¬½Ó
+	//·¢ËÍ»Ø¸´Êı¾İ°ü¸ø¿Í»§¶Ë£¬»Ø¸´ÄÚÈİ°üº¬»¶Ó­ĞÅÏ¢ºÍ¿ÉÖ´ĞĞµÄÃüÁî
 	rspns.type = DONE;
-	char welcome[RSPNS_TEXT_SIZE] = 
+	char welcome[RSPNS_TEXT_SIZE] =
 		"Welcome to Mini FTP Server!\n"
 		"Avilable commands:\n"
 		"cd\t<path>\n"
@@ -120,45 +118,48 @@ ServerThread::ServerThread(SOCKET s, sockaddr_in a){
 		"put\t<file>\n"
 		"get\t<file>\n"
 		"ls\t<no param>\n"
+		"lls\t<no param>\n"
 		"quit\t<no param>\n";
 	strcpy_s(rspns.text, welcome);
 	SendRspns();
 }
 
+//Ö´ĞĞ¿Í»§¶ËµÄÇëÇó
 void ServerThread::DoServer(){
-	//å¾ªç¯è·å–å®¢æˆ·ç«¯å‘½ä»¤æŠ¥æ–‡å¹¶è¿›è¡Œå¤„ç†
-	bool exec = true;
-	while(exec){
-		if(!ReceiveCmd())
+	//Ñ­»·»ñÈ¡¿Í»§¶ËµÄÃüÁîÊı¾İ°ü²¢ÇÒ¸ù¾İÃüÁîÀàĞÍ×ö³öÏàÓ¦µÄ´¦Àí
+	bool exec = true; //±íÊ¾ÊÇ·ñ¼ÌĞøÑ­»·Ö´ĞĞÏÂÒ»ÌõÃüÁî
+	while (exec){
+		//½ÓÊÕ¿Í»§¶Ë·¢ËÍµÄÊı¾İ°ü
+		if (!ReceiveCmd())
 			break;
-		//æ ¹æ®å‘½ä»¤ç±»å‹åˆ†æ´¾æ‰§è¡Œï¼š
-		switch(cmd.type)
+		//¸ù¾İÃüÁîµÄÀàĞÍÖ´ĞĞÏàÓ¦µÄ²Ù×÷£¬Èç¹ûÖ´ĞĞ³ö´íÔòÉèÖÃexecÎªfalse
+		switch (cmd.type)
 		{
 		case CD:
-			if(!ExecCD())
+			if (!ExecCD())
 				exec = false;
 			break;
-			
+
 		case PWD:
-			if(!ExecPWD())
+			if (!ExecPWD())
 				exec = false;
 			break;
 
 		case PUT:
-			if(!ExecPUT())
+			if (!ExecPUT())
 				exec = false;
 			break;
 
 		case GET:
-			if(!ExecGET())
+			if (!ExecGET())
 				exec = false;
 			break;
 
 		case LS:
-			if(!ExecLS())
+			if (!ExecLS())
 				exec = false;
 			break;
-			
+
 		case QUIT:
 			ExecQUIT();
 			exec = false;
@@ -166,61 +167,59 @@ void ServerThread::DoServer(){
 
 		default:
 			rspns.type = ERR_TYPE;
-			if(!SendRspns())
+			if (!SendRspns())
 				exec = false;
 			break;
 		}
-		//if(!ExecCmd())
-		//	break;
 	}
-	
-	//çº¿ç¨‹ç»“æŸå‰å…³é—­æ§åˆ¶è¿æ¥å¥—æ¥å­—ï¼š
+	//½áÊøÇ°¹Ø±Õ¿ØÖÆÁ¬½ÓÁ¬½ÓÌ×½Ó×Ö
 	closesocket(sServer);
 }
 
+//·¢ËÍÓ¦´ğÊı¾İ°ü¸ø¿Í»§¶Ë
 bool ServerThread::SendRspns(){
 	char *pRspns = (char *)&rspns;
 	int ret = send(sServer, pRspns, sizeof(RspnsPacket), 0);
-	if(ret == SOCKET_ERROR){
+	if (ret == SOCKET_ERROR){
 		cout << "Send response failed! Error code: " << WSAGetLastError() << endl;
 		return false;
 	}
 	return true;
 }
 
+//´Ó¿Í»§¶Ë½ÓÊÕÃüÁîÊı¾İ°ü
 bool ServerThread::ReceiveCmd(){
 	int ret;
-	int nLeft = sizeof(CmdPacket);
-	char *pCmd = (char *)&cmd; 
-	
-	//ä»æ§åˆ¶è¿æ¥ä¸­è¯»å–æ•°æ®ï¼Œå¤§å°ä¸ºsizeof(CmdPacket)ï¼š
-	while(nLeft > 0){
+	int nLeft = sizeof(CmdPacket); //Ê£Óà×Ö½ÚÊı£¬³õÊ¼ÎªÃüÁîÊı¾İ°üµÄ´óĞ¡
+	char *pCmd = (char *)&cmd;
+	//Ñ­»·½ÓÊÕÖ±µ½Ê£Óà×Ö½ÚÊıÎªÁã
+	while (nLeft > 0){
 		ret = recv(sServer, pCmd, nLeft, 0);
-		if(ret == SOCKET_ERROR){
+		if (ret == SOCKET_ERROR){
 			cout << "Receive command failed! Error code: " << WSAGetLastError() << endl;
 			return false;
 		}
-		if(ret == 0){
+		if (ret == 0){
 			cout << "Client has closed the connection!" << endl;
 			return false;
 		}
-		
+
 		nLeft -= ret;
 		pCmd += ret;
 	}
-	
-	return true; //æˆåŠŸè·å–å‘½ä»¤æŠ¥æ–‡
+	return true;
 }
 
+//³õÊ¼»¯Êı¾İÁ¬½ÓÁ¬½ÓÌ×½Ó×Ö
 bool ServerThread::InitialDataSocket(){
-	//åˆ›å»ºsocket
+	//´´½¨Êı¾İÁ¬½ÓÁ¬½ÓÌ×½Ó×Ö
 	sData = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if(sData == INVALID_SOCKET){
+	if (sData == INVALID_SOCKET){
 		cout << "Create data socket failed!" << endl;
 		return false;
 	}
 
-	//è¯·æ±‚è¿æ¥å®¢æˆ·ç«¯
+	//ÇëÇóÁ¬½Ó¿Í»§¶Ë
 	int ret = connect(sData, (struct sockaddr *)&saClient, sizeof(saClient));
 	if (ret == SOCKET_ERROR){
 		cout << "Connect to client failed! Error code: " << WSAGetLastError() << endl;
@@ -230,205 +229,195 @@ bool ServerThread::InitialDataSocket(){
 	return true;
 }
 
+//Ö´ĞĞcdÖ¸Áî
 bool ServerThread::ExecCD(){
-	//è®¾ç½®å½“å‰ç›®å½•ï¼Œä½¿ç”¨win32 APIæ¥å£å‡½æ•°
-	if(SetCurrentDirectory(cmd.arg)){
+	//ÉèÖÃµ±Ç°Ä¿Â¼£¬Ê¹ÓÃwin32 API½Ó¿Úº¯Êı
+	if (SetCurrentDirectory(cmd.arg)){
 		rspns.type = DONE;
-		if(!GetCurrentDirectory(RSPNS_TEXT_SIZE, rspns.text))
-			rspns.type = ERR_CD1;
+		if (!GetCurrentDirectory(RSPNS_TEXT_SIZE, rspns.text)) 
+			rspns.type = ERR_CD1; //ÎŞ·¨»ñÈ¡µ±Ç°Ä¿Â¼£¬´íÎóÀàĞÍERR_CD1
 	}
-	else
+	else //ÉèÖÃµ±Ç°Ä¿Â¼Ê§°Ü£¬´íÎóÀàĞÍERR_CD
 		rspns.type = ERR_CD;
-	if(!SendRspns()) //å‘é€å›å¤æŠ¥æ–‡
+	//·¢ËÍÓ¦´ğÊı¾İ°ü
+	if (!SendRspns())
 		return false;
 	return true;
 }
 
+//Ö´ĞĞpwdÖ¸Áî
 bool ServerThread::ExecPWD(){
 	rspns.type = DONE;
-	//è·å–å½“å‰ç›®å½•ï¼Œå¹¶æ”¾è‡³å›å¤æŠ¥æ–‡ä¸­
-	if(!GetCurrentDirectory(RSPNS_TEXT_SIZE, rspns.text))
-		rspns.type = ERR_PWD;
-	if(!SendRspns()) 
+	//»ñÈ¡µ±Ç°Ä¿Â¼£¬½«½á¹û·ÅÔÚÓ¦´ğÊı¾İ°üµÄÄÚÈİÖĞ
+	if (!GetCurrentDirectory(RSPNS_TEXT_SIZE, rspns.text))
+		rspns.type = ERR_PWD; //ÎŞ·¨»ñÈ¡µ±Ç°Ä¿Â¼£¬´íÎóÀàĞÍERR_PWD
+	//·¢ËÍÓ¦´ğÊı¾İ°ü
+	if (!SendRspns())
 		return false;
 	return true;
 }
 
+//Ö´ĞĞputÖ¸Áî
 bool ServerThread::ExecPUT(){
-	//æŸ¥æ‰¾æœåŠ¡å™¨çš„å½“å‰ç›®å½•ä¸‹æœ‰æ— é‡åæ–‡ä»¶
-	if(FileExists(cmd.arg)){
-		rspns.type = ERR_PUT;
-		if(!SendRspns()) 
+	//²éÕÒ·şÎñÆ÷µÄµ±Ç°Ä¿Â¼ÏÂÓĞÎŞÖØÃûÎÄ¼ş
+	if (FileExist()){
+		rspns.type = ERR_PUT; //ÓĞÖØÃûÎÄ¼ş£¬´íÎóÀàĞÍERR_PUT
+		if (!SendRspns())
 			return false;
 	}
-	else{
+	else{ //ÎŞÖØÃûÎÄ¼ş
 		fstream fout;
-		fout.open(cmd.arg, ios::out|ios::binary);
-		if(fout.is_open()){ //æ£€æµ‹æ–‡ä»¶æ˜¯å¦æ‰“å¼€
-			//æ— é‡åæ–‡ä»¶çš„æƒ…å†µä¸‹åˆ™å‘é€å›å¤æŠ¥æ–‡
+		fout.open(cmd.arg, ios::out | ios::binary); //¶ş½øÖÆ·½Ê½Ğ´ÎÄ¼ş
+		if (fout.is_open()){ //ÎÄ¼şÊÇ·ñ³É¹¦´ò¿ª
 			rspns.type = DONE;
-			if(!SendRspns()) {
+			//·¢ËÍÓ¦´ğÊı¾İ°ü²¢½¨Á¢Êı¾İÁ¬½ÓÁ¬½ÓÌ×½Ó×ÖÁ¬½Ó¿Í»§¶Ë
+			if (!SendRspns()) {
 				fout.close();
 				return false;
 			}
-			//å¦å»ºä¸€ä¸ªæ•°æ®è¿æ¥æ¥æ¥æ”¶æ•°æ®ï¼š
-			if(!InitialDataSocket()) {
+			if (!InitialDataSocket()) {
 				fout.close();
 				return false;
 			}
-			//if(!ReceiveData()) 	
-				//return false;
+			//Ñ­»·½ÓÊÕ¿Í»§¶Ë·¢ËÍµÄÊı¾İ²¢ÇÒĞ´Èëµ½ÎÄ¼ş 
 			char buf[BUFFER_SIZE];
-			//å¾ªç¯æ¥æ”¶æ‰€æœ‰æ•°æ®ï¼Œå¹¶åŒæ—¶å†™å¾€æ–‡ä»¶ï¼š
 			cout << "Receiving data..." << endl;
-			while(true){
-				int ret = recv(sData, buf, BUFFER_SIZE, 0);
-				if(ret == SOCKET_ERROR){
+			while (true){
+				int ret = recv(sData, buf, BUFFER_SIZE, 0); //½ÓÊÕÊı¾İ
+				if (ret == SOCKET_ERROR){
 					cout << "Receive data failed because some error occurs during data transmiting!" << endl;
 					fout.close();
 					closesocket(sData);
 					return false;
 				}
 
-				if(ret == 0) //æ•°æ®ä¼ é€ç»“æŸ
+				if (ret == 0) //µ±½ÓÊÕµ½µÃ×Ö½ÚÊıÎª0Ê±ËµÃ÷Êı¾İ´«ËÍÒÑ¾­½áÊøÁË
 					break;
 
-				fout.write(buf, ret);
+				fout.write(buf, ret); //½«½ÓÊÕµ½µÄÊı¾İĞ´ÈëÎÄ¼ş
 			}
+			//½ÓÊÕÎÄ¼ş³É¹¦ºó¹Ø±ÕÎÄ¼şºÍÊı¾İÁ¬½ÓÁ¬½ÓÌ×½Ó×Ö²¢ÏÔÊ¾½ÓÊÕ³É¹¦ĞÅÏ¢
 			fout.close();
 			closesocket(sData);
 			cout << "Receive data succeed!" << endl;
 		}
-		else{
+		else{ //ÎÄ¼ş´ò¿ªÊ§°Ü
 			cout << "Can't open the file to write data!" << endl;
-			rspns.type = ERR_PUT1;
-			if(!SendRspns()) 
+			rspns.type = ERR_PUT1; //ÎŞ·¨´ò¿ªÎÄ¼şĞ´ÈëÊı¾İ£¬´íÎóÀàĞÍERR_PUT1
+			if (!SendRspns())
 				return false;
+			//¹Ø±ÕÎÄ¼şºÍÊı¾İÁ¬½ÓÁ¬½ÓÌ×½Ó×Ö
 			fout.close();
 			closesocket(sData);
 		}
-	}	
+	}
 	return true;
 }
 
+//Ö´ĞĞgetÖ¸Áî
 bool ServerThread::ExecGET(){
 	fstream fin;
-	fin.open(cmd.arg, ios::in|ios::binary);
-	if(fin.is_open()){
+	fin.open(cmd.arg, ios::in | ios::binary); //¶ş½øÖÆ·½Ê½¶ÁÎÄ¼ş
+	if (fin.is_open()){ //ÎÄ¼şÊÇ·ñ´ò¿ª³É¹¦
 		rspns.type = DONE;
-		if(!SendRspns()){
+		//·¢ËÍÓ¦´ğÊı¾İ°ü²¢½¨Á¢Êı¾İÁ¬½ÓÁ¬½ÓÌ×½Ó×ÖÁ¬½Ó¿Í»§¶Ë
+		if (!SendRspns()){
 			fin.close();
 			return false;
 		}
-		//åˆ›å»ºé¢å¤–çš„æ•°æ®è¿æ¥æ¥ä¼ é€æ•°æ®ï¼š
-		if(!InitialDataSocket()){
+		if (!InitialDataSocket()){
 			fin.close();
 			return false;
 		}
-		//if(!SendData())
-		//	return false;
+
+		//Ñ­»·¶ÁÈ¡ÎÄ¼şÊı¾İ²¢·¢ËÍ¸ø¿Í»§¶Ë
 		char buf[BUFFER_SIZE];
 		cout << "Sending data..." << endl;
-		while(true){
-		//ä»æ–‡ä»¶ä¸­å¾ªç¯è¯»å–æ•°æ®å¹¶å‘å¾€å®¢æˆ·ç«¯
-			fin.read(buf, BUFFER_SIZE);
+		while (true){
+			fin.read(buf, BUFFER_SIZE); //¶ÁÈ¡ÎÄ¼şÄÚÈİ£¬Ã¿´ÎBUFFER_SIZE×Ö½Ú
 			int length = fin.gcount();
-			int ret = send(sData, buf, length, 0);
-			if(ret == SOCKET_ERROR){
+			int ret = send(sData, buf, length, 0); //·¢ËÍÊı¾İ
+			if (ret == SOCKET_ERROR){
 				cout << "Send data failed because some error occurs during data transmiting!" << endl;
 				fin.close();
 				closesocket(sData);
 				return false;
 			}
-			if(length < BUFFER_SIZE)
+			if (length < BUFFER_SIZE) //µ±¶ÁÈ¡µ½µÄÊı¾İ×Ö½ÚÊıĞ¡ÓÚBUFFER_SIZE×Ö½ÚÊ±ËµÃ÷ÒÑ¾­¶ÁÈ¡µ½ÎÄ¼şÄ©Î²ÁË
 				break;
 		}
+		//·¢ËÍÎÄ¼ş³É¹¦ºó¹Ø±ÕÎÄ¼şºÍÊı¾İÁ¬½ÓÁ¬½ÓÌ×½Ó×Ö²¢ÏÔÊ¾·¢ËÍ³É¹¦ĞÅÏ¢
 		fin.close();
 		closesocket(sData);
 		cout << "Send data succeed!" << endl;
 	}
-	else{ //æ‰“å¼€æ–‡ä»¶å¤±è´¥ï¼š
-		rspns.type = ERR_GET;
-		if(!SendRspns()) 
+	else{ //ÎÄ¼ş´ò¿ªÊ§°Ü
+		rspns.type = ERR_GET; //ÎŞ·¨´ò¿ªÎÄ¼ş¶ÁÈ¡Êı¾İ£¬´íÎóÀàĞÍERR_GET
+		if (!SendRspns())
 			return false;
 	}
 	return true;
 }
 
+//Ö´ĞĞlsÖ¸Áî
 bool ServerThread::ExecLS(){
 	rspns.type = DONE;
-	if(!SendRspns())
+	//·¢ËÍÓ¦´ğÊı¾İ°ü²¢½¨Á¢Êı¾İÁ¬½ÓÁ¬½ÓÌ×½Ó×ÖÁ¬½Ó¿Í»§¶Ë
+	if (!SendRspns())
 		return false;
-	//é¦–å…ˆå»ºç«‹æ•°æ®è¿æ¥ï¼š
-	if(!InitialDataSocket()) 
+	if (!InitialDataSocket())
 		return false;
-	//å‘é€æ–‡ä»¶åˆ—è¡¨ä¿¡æ¯ï¼š
-	//if(!SendFileList())
-	//	return false;
+
 	HANDLE hff;
 	WIN32_FIND_DATA fd;
-
-	//æœç´¢æ–‡ä»¶
-	hff = FindFirstFile("*", &fd);
-	if(hff == INVALID_HANDLE_VALUE){ //å‘ç”Ÿé”™è¯¯
+	hff = FindFirstFile("*", &fd); //ËÑË÷ÎÄ¼ş,Æ¥ÅäÈÎºÎÃû×Ö
+	if (hff == INVALID_HANDLE_VALUE){ //¼ì²âÊÇ·ñ³öÏÖ´íÎó
+		 //³ö´íÔò·¢ËÍ´íÎóĞÅÏ¢
 		cout << "List file failed!" << endl;
-		char *dataStr="Can't list files!\n";
+		char *dataStr = "Can't list files!\n";
 		int ret = send(sData, dataStr, strlen(dataStr), 0);
-		if(ret == SOCKET_ERROR){
+		if (ret == SOCKET_ERROR){
 			cout << "Send file list failed!" << endl;
 			closesocket(sData);
 			return false;
 		}
 	}
-
+	//Ã»ÓĞ´íÎóÔòÑ­»··¢ËÍÕÒµ½µÄÃ¿Ò»¸öÎÄ¼şµÄĞÅÏ¢
 	bool find = true;
-	while(find){
-		//å‘é€æ­¤é¡¹æ–‡ä»¶ä¿¡æ¯ï¼š
-		//if(!SendFileRecord(&fd)){
-		//	closesocket(datatcps);
-		//	return false;
-		//}
-		char filerecord[MAX_PATH+32];
+	while (find){
+		char filerecord[MAX_PATH + 32];
 		FILETIME ft;
-		FileTimeToLocalFileTime(fd.ftLastWriteTime, &ft);
+		FileTimeToLocalFileTime(&fd.ftLastWriteTime, &ft);
 		SYSTEMTIME lastwtime;
 		FileTimeToSystemTime(&ft, &lastwtime);
 		char *dir = fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? "<DIR>" : "";
-		sprintf(filerecord,"%04d-%02d-%02d %02d:%02d    %5s  %10d  %-20s\n",
-			lastwtime.wYear,
-			lastwtime.wMonth,
-			lastwtime.wDay,
-			lastwtime.wHour,
-			lastwtime.wMinute,
-			dir,
-			fd.nFileSizeLow,
-			fd.cFileName);
-		int ret = send(sData, filerecord, strlen(filerecord), 0);
-		if(ret == SOCKET_ERROR){
+		sprintf_s(filerecord, "%04d-%02d-%02d %02d:%02d    %5s  %10d  %-20s\n", lastwtime.wYear, lastwtime.wMonth, lastwtime.wDay, lastwtime.wHour, lastwtime.wMinute, dir, fd.nFileSizeLow, fd.cFileName);
+		int ret = send(sData, filerecord, strlen(filerecord), 0); //·¢ËÍÎÄ¼şĞÅÏ¢
+		if (ret == SOCKET_ERROR){
 			cout << "Send file list failed!" << endl;
 			closesocket(sData);
 			return false;
 		}
-
-		//æœç´¢ä¸‹ä¸€ä¸ªæ–‡ä»¶ï¼š
-		find = FindNextFile(hff, &fd);
+		find = FindNextFile(hff, &fd); //ËÑË÷ÏÂÒ»¸öÎÄ¼ş£¬Ã»ÕÒµ½Ôò½áÊøÊı¾İ´«Êä
 	}
-
-	closesocket(sData);
+	closesocket(sData); //¹Ø±ÕÊı¾İÁ¬½ÓÁ¬½ÓÌ×½Ó×Ö
 	return true;
 
 }
 
+//Ö´ĞĞquitÖ¸Áî
 void ServerThread::ExecQUIT(){
-	cout << "Client(" << inet_ntoa(saClient.sin_addr) << ") exit!" << endl;
+	cout << "Client(" << inet_ntoa(saClient.sin_addr) << ") exit!" << endl; //Êä³ö¿Í»§¶ËÍË³öµÄĞÅÏ¢
+	//·¢ËÍÓ¦´ğÊı¾İ°ü
 	rspns.type = DONE;
 	strcpy_s(rspns.text, "Goodbye!\n");
 	SendRspns();
 }
 
+//ÅĞ¶ÏÎÄ¼şÊÇ·ñÒÑ´æÔÚÓëµ±Ç°Ä¿Â¼ÏÂ
 bool ServerThread::FileExist(){
 	WIN32_FIND_DATA fd;
-	if(FindFirstFile(cmd.arg, &fd) == INVALID_HANDLE_VALUE)
+	if (FindFirstFile(cmd.arg, &fd) == INVALID_HANDLE_VALUE) //ÎÄ¼şÃûÎªÃüÁîÊı¾İ°üµÄ²ÎÊı
 		return false;
 	return true;
 }
